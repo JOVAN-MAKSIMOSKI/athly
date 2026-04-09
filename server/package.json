@@ -1,0 +1,36 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "migrate:retag-pec-fly": "tsx src/scripts/retagFlyExercisesToPecs.ts",
+    "migrate:retag-pulldown-lats": "tsx src/scripts/retagPulldownExercisesToLats.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "@types/jsonwebtoken": "^9.0.9",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@google/generative-ai": "^0.24.1",
+    "argon2": "^0.31.2",
+    "csvtojson": "^2.0.14",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^9.1.4",
+    "zod": "^4.3.5"
+  }
+}

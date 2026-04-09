@@ -1,0 +1,32 @@
+{
+  "name": "athly",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "npm run start --workspace=server",
+    "dev": "npm run dev --workspace=server",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client"
+  },
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "dependencies": {
+    "@google-cloud/aiplatform": "^6.3.0",
+    "@google-cloud/vertexai": "^1.10.0",
+    "@google/generative-ai": "^0.24.1",
+    "@modelcontextprotocol/sdk": "^1.27.0",
+    "csvtojson": "^2.0.14",
+    "dotenv": "^17.2.3",
+    "env": "^0.0.2",
+    "mongoose": "^9.1.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.0.9",
+    "gts": "^7.0.0",
+    "nodemon": "^3.1.11",
+    "tsx": "^4.21.0"
+  }
+}

@@ -1,0 +1,156 @@
+#root {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 15rem;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+h1 {
+  margin: 0;
+  color: #dbeafe;
+  font-size: 2.25rem;
+}
+
+.brand {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.2em;
+  color: #93c5fd;
+}
+
+.subtitle {
+  margin: 0;
+  color: #bfdbfe;
+}
+
+.card {
+  background: linear-gradient(180deg, #14233f 0%, #0f1b31 100%);
+  border: 1px solid #1d3f73;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 16px 40px rgba(5, 11, 24, 0.45);
+}
+
+.header {
+  padding: 1.35rem;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.panel {
+  min-height: 150px;
+}
+
+.panel h2 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: #cfe5ff;
+}
+
+.panel p {
+  margin: 0;
+  color: #9fb9dc;
+}
+
+.chatbox {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  width: min(1080px, calc(100vw - 2rem));
+  padding: 0;
+  overflow: hidden;
+}
+
+.chatbox-header {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #1d3f73;
+  color: #dbeafe;
+  font-weight: 600;
+}
+
+.chatbox-input-wrap {
+  border-top: 1px solid #1d3f73;
+  padding: 0.85rem 1rem 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.chatbox-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.chatbox-status {
+  margin: 0;
+  color: #9fb9dc;
+  font-size: 0.9rem;
+}
+
+.chatbox-status-error {
+  color: #fca5a5;
+}
+
+.chatbox-counter {
+  color: #85a4cc;
+  font-size: 0.8rem;
+}
+
+.chatbox-input {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid #2a4d82;
+  background: #0b1a31;
+  color: #dbeafe;
+  padding: 0.8rem 0.9rem;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.chatbox-input::placeholder {
+  color: #85a4cc;
+}
+
+.chatbox-input:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+.chatbox-send {
+  justify-self: end;
+  border-radius: 8px;
+  border: 1px solid #3b82f6;
+  padding: 0.5rem 1rem;
+  color: #dbeafe;
+  background: #163866;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chatbox-send:hover {
+  background: #1b447a;
+}
+
+.chatbox-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+}

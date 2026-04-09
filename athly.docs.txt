@@ -1,0 +1,116 @@
+
+IMPLEMENT SKILLS
+comfortable with heavier  weights is not set
+the workouts are not structured properly(are enough sets calculated per week?)
+add progression for 2x to faliour
+
+
+
+
+
+
+
+**User questions - Goes into the schema, also update the exercise schema to match the zod schema
+
+
+
+
+
+
+
+**LLM USAGE
+Metric	        "Good" Target	Danger Zone	    How to Fix					
+p50 Latency	    2s	            > 5s	        Reduce output tokens; switch to a faster model(GeminiFlash).					
+p99 Latency	    8s	            > 15s	        Check for DB timeouts or retry logic that is too aggressive.					
+Input Tokens	1k	            > 8k	        Filter user history before sending; use RAG (Vector Search).					
+Output Tokens	200	            > 600	        Ask for JSON only; remove "chatty" intros/outros.					
+								
+
+
+
+
+***PAST WEEK 8
+gcloud auth login-?
+10.Fix how the user id is fetched in functions, it should be fetched from auth currently it is just expected as a parametar, fix this once you are done testing
+1. Ton of fixing and work to do around the auth and jwt, token isnt stored in database and refresh token isnt implemented at all, revert to easy-reservartion project and sync the auth.
+2. integrate llamaindex
+3. kao so vlaga userot prvpat, mu sugeriras splitovi, moze i costum split da si napraj
+4. si stava kolku pati nedelno saka da vezba ne se bitni denovite nego progress ke gleame po nedeli
+16. when user turns from beginner to intermediate, create new workouts
+17. Figure out how to progress with beginners most efficiently
+18. Figure out what exactly can be deleted after a certain time period and set more TTL indexes
+19. If a user takes a 3 month break, it should announce to the agent, agent will send the records. User can paste the records when it comes back, TTL index on workouts stays the same.
+20.-After the workout is submitted the user is asked 2 questions, whether he would like to change any exercise and whether the weight is appropriate(we just need to ask the question)
+21. Ask user which muscle group would he like to prioritize?
+22. Introduce supersets
+23. make a good use of this workoutFrequencyPerWeek
+11. Have a warm-up for heavier movements
+3. tools for suggesting the starting weight, sets and reps.
+14. test for injuries
+15. keep the injuries spotted in context
+16. before each workout, ask for soreness or fatigue or lack of energy
+17. track workouts with calendar and enforce rest days if needed or plan the workout days ahead and remind with a nortification
+appendSamplingAuditLog writes to localStorage on each sampling request.
+If request volume grows, batching/throttling logs is possible.
+INSTRUCTIONS
+18. Authorization (if HTTP) : Who can call which tool?; Rate limiting?; Auth headers?
+19. In registry.ts the tools and prompts are stored in memmory and it may be a performance risk as the app scales3
+20. Automatically detect if a session is expired
+
+
+
+bash gcloud auth login
+$ bash gcloud config set project project-e01e21dc-8855-4d6d-a22
+$ bash gcloud auth application-default login 
+
+
+
+Great direction. Here is the bucket map for useAgent.ts, aligned with INSTRUCTIONS.md and your loop-ownership rule in CLIENT_GUIDELINES.md.
+
+**Bucket 1: Must Stay In Code (Deterministic Control/Protocol)**
+1. Loop ownership and stopping logic: useAgent.ts
+2. Tool allowlist/required mode and strict sequencing: useAgent.ts, useAgent.ts, useAgent.ts
+3. Tool call execution/retry/timeouts: useAgent.ts, useAgent.ts
+4. Elicitation bridge (protocol handler path): useAgent.ts
+5. Auth/session/JWT checks and user id extraction: useAgent.ts, useAgent.ts, useAgent.ts
+6. Registry resolution and tool-name normalization: useAgent.ts
+
+Why: this is orchestration/runtime behavior, not prompt reasoning. Moving this into skills would violate your boundary and add latency.
+
+**Bucket 2: Good Candidates For Skills/Prompts (Non-Controlling)**
+1. Intent-scoped workflow instruction text selection: useAgent.ts
+2. Final user-facing rendering policy block: useAgent.ts
+3. Coaching style and safety conversational framing now in global prompt: eliteCoachSystem.prompt.ts
+4. Onboarding flow instruction set (new): ask goals, equipment, injuries/energy, preferred split; then call existing tools.
+
+Why: these are declarative behavior instructions and output style, which matches your prompt/skill rules.
+
+**Bucket 3: Move Out Of useAgent (But Not Into Skills)**
+1. Message sanitation/redaction: useAgent.ts
+2. Structured response humanization: useAgent.ts
+3. Request compaction/token-budget utility: useAgent.ts
+4. Tool-arg normalization for create_user_exercises: useAgent.ts
+5. Tool-result parsing/failure formatting helpers: useAgent.ts, useAgent.ts
+
+Why: these are deterministic utility concerns and should live in helper modules for testability and smaller orchestrator size.
+
+**Practical Refactor Order**
+1. Extract a headless orchestrator module from useAgent.ts and keep React hook as adapter only.
+2. Move Bucket 3 utilities into dedicated files under client core/helpers.
+3. Keep a minimal global system prompt and add small skill prompts for onboarding/finalization.
+4. Keep strict tool gating and retries in orchestrator code, not in skills.
+
+If you want, I can implement step 1 now by creating an orchestrator module and wiring the hook to it without changing behavior.
+
+
+
+
+
+
+
+
+
+
+
+
+

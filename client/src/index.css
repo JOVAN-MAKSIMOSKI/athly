@@ -1,0 +1,96 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+:root {
+  font-family: 'Open Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: rgb(255 255 255);
+  color: rgb(15 23 42);
+}
+
+@keyframes chatMessagePop {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chat-message-pop {
+  animation: chatMessagePop 220ms ease-out;
+}
+
+@keyframes typingDotBounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.typing-dot {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 9999px;
+  background-color: rgb(51 65 85);
+  animation: typingDotBounce 1s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+@keyframes typingGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(14, 165, 233, 0.12);
+  }
+}
+
+.typing-active {
+  animation: typingGlow 1.4s ease-in-out infinite;
+}
+
+@keyframes sendButtonPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.send-button-ready {
+  animation: sendButtonPulse 1.2s ease-in-out infinite;
+}
