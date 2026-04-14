@@ -7,6 +7,10 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
+    "ai:store": "tsx src/scripts/storeExercisesForAi.ts",
+    "ai:index:qdrant": "tsx src/scripts/indexExercisesToQdrant.ts",
+    "ai:search:qdrant": "tsx src/scripts/searchExercisesQdrant.ts",
+    "ai:verify:qdrant": "tsx src/scripts/verifyQdrantIndexing.ts",
     "migrate:retag-pec-fly": "tsx src/scripts/retagFlyExercisesToPecs.ts",
     "migrate:retag-pulldown-lats": "tsx src/scripts/retagPulldownExercisesToLats.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -15,21 +19,23 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/node": "^25.0.9",
     "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^25.0.9",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@google-cloud/vertexai": "^1.10.0",
-    "@modelcontextprotocol/sdk": "^1.26.0",
     "@google/generative-ai": "^0.24.1",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@qdrant/js-client-rest": "^1.17.0",
     "argon2": "^0.31.2",
     "csvtojson": "^2.0.14",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.2",
+    "llamaindex": "^0.12.1",
     "mongoose": "^9.1.4",
     "zod": "^4.3.5"
   }

@@ -141,6 +141,7 @@ function HomePage() {
 	const [userText, setUserText] = useState('')
 	const [selectedSplit, setSelectedSplit] = useState('')
 	const [splitSaveError, setSplitSaveError] = useState<string | null>(null)
+	const [isSavingSplit, setIsSavingSplit] = useState(false)
 	const { messages, isRunning, error, run, triggerOnboarding } = useAgent()
 	const { isAuthenticated, token, user, setSession } = useAuth()
 
@@ -172,10 +173,11 @@ function HomePage() {
 		'grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold md:size-10'
 
 	const submitSplitSelection = async () => {
-		if (!isAuthenticated || !token || !user || isRunning) {
+		if (!isAuthenticated || !token || !user || isRunning || isSavingSplit) {
 			return
 		}
 
+		setIsSavingSplit(true)
 		setSplitSaveError(null)
 
 		try {
@@ -203,6 +205,8 @@ function HomePage() {
 		} catch {
 			setSplitSaveError('Could not save your split right now. Please try again.')
 			return
+		} finally {
+			setIsSavingSplit(false)
 		}
 	}
 
@@ -241,10 +245,10 @@ function HomePage() {
 												onClick={() => {
 													void submitSplitSelection()
 												}}
-												disabled={!isAuthenticated || isRunning}
+												disabled={!isAuthenticated || isRunning || isSavingSplit}
 												className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50"
 											>
-												Save
+												{isSavingSplit ? 'Saving...' : 'Save'}
 											</button>
 										</div>
 										{splitSaveError ? <p className="text-xs text-rose-600">{splitSaveError}</p> : null}

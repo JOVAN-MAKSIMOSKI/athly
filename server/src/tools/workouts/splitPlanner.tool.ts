@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { UserModel } from '../../database/models/UserSchema.js';
+import { WorkoutModel } from '../../database/models/WorkoutSchema.js';
 import { WORKOUT_SPLIT_VALUES, type WorkoutSplit } from '../../domain/users/workoutSplits.js';
 import { ensureUserExperienceLevel } from '../../domain/users/experienceProgression.js';
 import {
@@ -186,6 +187,57 @@ export function registerSplitPlannerTool(server: McpServer) {
 
         const dayPlans = buildSplitDayPlans(split);
         const baseDate = parsed.startDate ? new Date(parsed.startDate) : new Date();
+
+        // Idempotency guard: if a full planned batch was created very recently,
+        // reuse it instead of generating duplicate workouts.
+        if (parsed.createPlaceholders) {
+          const duplicateWindowMs = 5 * 60 * 1000;
+          const windowStart = new Date(Date.now() - duplicateWindowMs);
+
+          const recentPlannedWorkouts = await WorkoutModel.find({
+            userId: parsed.userId,
+            status: 'planned',
+            createdAt: { $gte: windowStart },
+          })
+            .sort({ createdAt: 1 })
+            .select('_id name createdAt startTime estimatedWorkoutTimeToFinish exercises')
+            .lean();
+
+          if (recentPlannedWorkouts.length >= dayPlans.length) {
+            const reused = recentPlannedWorkouts.slice(-dayPlans.length).map((workout, index) => ({
+              dayIndex: dayPlans[index]?.dayIndex ?? index + 1,
+              label: dayPlans[index]?.label ?? workout.name,
+              request: dayPlans[index]?.request ?? '',
+              startTime: workout.startTime instanceof Date ? workout.startTime.toISOString() : new Date().toISOString(),
+              workoutId: String(workout._id),
+              exerciseCount: Array.isArray(workout.exercises) ? workout.exercises.length : 0,
+              estimatedWorkoutTimeToFinish: workout.estimatedWorkoutTimeToFinish,
+            }));
+
+            const responsePayload = {
+              success: true,
+              data: {
+                userId: parsed.userId,
+                split,
+                dayCount: dayPlans.length,
+                workoutsGenerated: true,
+                deduplicated: true,
+                days: reused,
+              },
+            };
+
+            await logToInspector('info', {
+              event: 'split_planner_deduplicated',
+              userId: parsed.userId,
+              split,
+              reusedCount: reused.length,
+            });
+
+            return {
+              content: [{ type: 'text', text: JSON.stringify(responsePayload) }],
+            };
+          }
+        }
 
         type PlannedDay = {
           dayIndex: number;

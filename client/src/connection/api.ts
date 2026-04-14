@@ -45,6 +45,30 @@ export type StoredWorkout = {
   exercises: WorkoutExercise[]
 }
 
+export type ReplaceExercisePayload = {
+  workoutId: string
+  userExerciseId: string
+  query?: string
+  limit?: number
+  filters?: {
+    targetMuscle?: string
+    equipment?: string
+    force?: string
+    compound?: boolean
+  }
+}
+
+type ReplaceExerciseResponse = {
+  status: string
+  data: {
+    oldExerciseId: string
+    newExerciseId: string
+    newUserExerciseId: string
+    score: number
+    updatedExercise: WorkoutExercise
+  }
+}
+
 type ListWorkoutsResponse = {
   status: string
   data: {
@@ -134,6 +158,25 @@ async function post<TResponse, TBody>(path: string, body: TBody): Promise<TRespo
   return parseResponse<TResponse>(response)
 }
 
+async function postWithAuth<TResponse, TBody>(path: string, body: TBody, authToken?: string): Promise<TResponse> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`
+  }
+
+  const response = await fetch(`${connectionConfig.apiBaseUrl}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify(body),
+  })
+
+  return parseResponse<TResponse>(response)
+}
+
 async function patch<TResponse, TBody>(path: string, body: TBody, authToken?: string): Promise<TResponse> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -192,5 +235,13 @@ export const workoutsApi = {
   async list(authToken?: string): Promise<StoredWorkout[]> {
     const response = await get<ListWorkoutsResponse>('/workouts', authToken)
     return response.data.workouts
+  },
+  async replaceExercise(payload: ReplaceExercisePayload, authToken?: string): Promise<ReplaceExerciseResponse['data']> {
+    const response = await postWithAuth<ReplaceExerciseResponse, ReplaceExercisePayload>(
+      '/workouts/replace-exercise',
+      payload,
+      authToken
+    )
+    return response.data
   },
 }

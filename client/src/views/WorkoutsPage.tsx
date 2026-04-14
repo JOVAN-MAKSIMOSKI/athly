@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ApiError, workoutsApi, type StoredWorkout, type WorkoutExercise, type WorkoutSet } from '../connection/api.ts'
+import {
+  ApiError,
+  workoutsApi,
+  type StoredWorkout,
+  type WorkoutExercise,
+  type WorkoutSet,
+  type ReplaceExercisePayload,
+} from '../connection/api.ts'
 import { useAuth } from '../state/authSessionStore.ts'
 
 function coerceFiniteNumber(value: unknown): number | undefined {
@@ -199,7 +206,15 @@ function summarizeNotes(notes: unknown): string {
   return normalizeTextValue(notes) ?? '-'
 }
 
-function WorkoutTable({ workout }: { workout: StoredWorkout }) {
+function WorkoutTable({
+  workout,
+  replacingKey,
+  onReplace,
+}: {
+  workout: StoredWorkout
+  replacingKey: string | null
+  onReplace: (workoutId: string, exercise: WorkoutExercise) => Promise<void>
+}) {
   return (
     <article className="w-full rounded-2xl border border-slate-200 p-6">
       <div className="mb-4 flex flex-wrap items-center justify-center gap-3 text-center">
@@ -224,6 +239,7 @@ function WorkoutTable({ workout }: { workout: StoredWorkout }) {
               <th className="px-4 py-3 font-semibold">Weight</th>
               <th className="px-4 py-3 font-semibold">Rest</th>
               <th className="px-4 py-3 font-semibold">Form Tips</th>
+              <th className="px-4 py-3 font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -240,6 +256,18 @@ function WorkoutTable({ workout }: { workout: StoredWorkout }) {
                     ? <ul className="list-disc pl-4 space-y-1">{exercise.formTips.map((tip, i) => <li key={i}>{tip}</li>)}</ul>
                     : summarizeNotes(exercise.notes)}
                 </td>
+                <td className="px-4 py-3 text-slate-700">
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={replacingKey === `${workout.id}:${exercise.userExerciseId}`}
+                    onClick={() => {
+                      void onReplace(workout.id, exercise)
+                    }}
+                  >
+                    {replacingKey === `${workout.id}:${exercise.userExerciseId}` ? 'Replacing...' : 'Replace'}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -254,6 +282,7 @@ function WorkoutsPage() {
   const [workouts, setWorkouts] = useState<StoredWorkout[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(() => isAuthenticated)
   const [error, setError] = useState<string | null>(null)
+  const [replacingKey, setReplacingKey] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -316,6 +345,72 @@ function WorkoutsPage() {
     }
   }, [isAuthenticated, refreshSession, token])
 
+  const handleReplaceExercise = async (workoutId: string, exercise: WorkoutExercise) => {
+    const rowKey = `${workoutId}:${exercise.userExerciseId}`
+    setReplacingKey(rowKey)
+    setError(null)
+
+    const payload: ReplaceExercisePayload = {
+      workoutId,
+      userExerciseId: exercise.userExerciseId,
+      query: `Find a similar replacement for ${exercise.exerciseName}`,
+      filters: {
+        equipment: exercise.equipment,
+      },
+      limit: 6,
+    }
+
+    try {
+      const result = await workoutsApi.replaceExercise(payload, token ?? undefined)
+      setWorkouts((current) =>
+        current.map((workout) => {
+          if (workout.id !== workoutId) return workout
+
+          return {
+            ...workout,
+            exercises: workout.exercises.map((entry) =>
+              entry.userExerciseId === exercise.userExerciseId ? result.updatedExercise : entry
+            ),
+          }
+        })
+      )
+      return
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        try {
+          const refreshedToken = await refreshSession()
+          if (refreshedToken) {
+            const result = await workoutsApi.replaceExercise(payload, refreshedToken)
+            setWorkouts((current) =>
+              current.map((workout) => {
+                if (workout.id !== workoutId) return workout
+
+                return {
+                  ...workout,
+                  exercises: workout.exercises.map((entry) =>
+                    entry.userExerciseId === exercise.userExerciseId ? result.updatedExercise : entry
+                  ),
+                }
+              })
+            )
+            return
+          }
+        } catch {
+          // Fall through to generic error handling.
+        }
+      }
+
+      const message = requestError instanceof Error ? requestError.message : 'Failed to replace exercise'
+      if (requestError instanceof ApiError && requestError.code) {
+        setError(`${requestError.code}: ${message}`)
+      } else {
+        setError(message)
+      }
+    } finally {
+      setReplacingKey(null)
+    }
+  }
+
   const content = useMemo(() => {
     if (!isAuthenticated) {
       return <p className="text-center text-base text-slate-500">Sign in to view saved workouts.</p>
@@ -336,11 +431,16 @@ function WorkoutsPage() {
     return (
       <div className="space-y-5">
         {workouts.map((workout) => (
-          <WorkoutTable key={workout.id} workout={workout} />
+          <WorkoutTable
+            key={workout.id}
+            workout={workout}
+            replacingKey={replacingKey}
+            onReplace={handleReplaceExercise}
+          />
         ))}
       </div>
     )
-  }, [error, isAuthenticated, isLoading, workouts])
+  }, [error, isAuthenticated, isLoading, replacingKey, workouts])
 
   return (
     <section className="mx-auto w-full space-y-5 py-4">

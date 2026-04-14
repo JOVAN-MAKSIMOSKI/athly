@@ -1,5 +1,8 @@
 
 IMPLEMENT SKILLS
+IMPLEMENT testing
+understand /routes
+structure the plan so each muscle group gets hit
 comfortable with heavier  weights is not set
 the workouts are not structured properly(are enough sets calculated per week?)
 add progression for 2x to faliour
@@ -7,8 +10,27 @@ add progression for 2x to faliour
 
 
 
+3. Form Tips RAG — During Session Coaching ⭐ High Value
+Your formTips field on each exercise is currently just stored data. With RAG you can make it conversational:
+User: "my back hurts during this deadlift"
+                ↓
+Retrieve deadlift node → formTips metadata
+                ↓
+LLM reasons over the tips + user complaint
+                ↓
+"Make sure your back is flat, not rounded. 
+ Try reducing weight by 20% and focus on hip hinge..."
+This turns static form tips into real-time coaching.
 
-
+3. Conversational Program Design ⭐⭐ LangChain
+Your agent currently picks a split (PPL, Upper/Lower, Arnold) and generates it once at registration. A more powerful feature is a multi-turn conversation that refines the program:
+User: "I want to switch from PPL to Upper/Lower"
+Agent: "You've been on PPL for 8 weeks. Your push day volume 
+        is higher than pull — want me to rebalance that in 
+        the new split?"
+User: "yes but keep my bench and OHP"
+Agent: "Got it. Here's your new Upper/Lower keeping bench 
+        on Upper A and OHP on Upper B..."
 
 **User questions - Goes into the schema, also update the exercise schema to match the zod schema
 
@@ -65,52 +87,10 @@ $ bash gcloud auth application-default login
 
 
 
-Great direction. Here is the bucket map for useAgent.ts, aligned with INSTRUCTIONS.md and your loop-ownership rule in CLIENT_GUIDELINES.md.
-
-**Bucket 1: Must Stay In Code (Deterministic Control/Protocol)**
-1. Loop ownership and stopping logic: useAgent.ts
-2. Tool allowlist/required mode and strict sequencing: useAgent.ts, useAgent.ts, useAgent.ts
-3. Tool call execution/retry/timeouts: useAgent.ts, useAgent.ts
-4. Elicitation bridge (protocol handler path): useAgent.ts
-5. Auth/session/JWT checks and user id extraction: useAgent.ts, useAgent.ts, useAgent.ts
-6. Registry resolution and tool-name normalization: useAgent.ts
-
-Why: this is orchestration/runtime behavior, not prompt reasoning. Moving this into skills would violate your boundary and add latency.
-
-**Bucket 2: Good Candidates For Skills/Prompts (Non-Controlling)**
-1. Intent-scoped workflow instruction text selection: useAgent.ts
-2. Final user-facing rendering policy block: useAgent.ts
-3. Coaching style and safety conversational framing now in global prompt: eliteCoachSystem.prompt.ts
-4. Onboarding flow instruction set (new): ask goals, equipment, injuries/energy, preferred split; then call existing tools.
-
-Why: these are declarative behavior instructions and output style, which matches your prompt/skill rules.
-
-**Bucket 3: Move Out Of useAgent (But Not Into Skills)**
-1. Message sanitation/redaction: useAgent.ts
-2. Structured response humanization: useAgent.ts
-3. Request compaction/token-budget utility: useAgent.ts
-4. Tool-arg normalization for create_user_exercises: useAgent.ts
-5. Tool-result parsing/failure formatting helpers: useAgent.ts, useAgent.ts
-
-Why: these are deterministic utility concerns and should live in helper modules for testability and smaller orchestrator size.
-
-**Practical Refactor Order**
-1. Extract a headless orchestrator module from useAgent.ts and keep React hook as adapter only.
-2. Move Bucket 3 utilities into dedicated files under client core/helpers.
-3. Keep a minimal global system prompt and add small skill prompts for onboarding/finalization.
-4. Keep strict tool gating and retries in orchestrator code, not in skills.
-
-If you want, I can implement step 1 now by creating an orchestrator module and wiring the hook to it without changing behavior.
 
 
 
 
 
 
-
-
-
-
-
-
-
+G90ISHFIS1231!2323g
