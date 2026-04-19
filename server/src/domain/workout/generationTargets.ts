@@ -1,4 +1,5 @@
 import type { MuscleGroup } from '../exercises/types.js';
+import { getWorkoutDurationBucket, type WorkoutDurationBucket } from './setTargetsByDuration.js';
 
 export type TrainingType = 'hypertrophy' | 'strength' | 'endurance' | 'mobility';
 export type MovementType = 'compound' | 'isolation';
@@ -37,7 +38,7 @@ export interface BuildWorkoutTargetsResult {
   trainingType: TrainingType;
   exercises: WorkoutTargetExercise[];
   estimatedDurationSeconds: number;
-  rulesApplied: Array<'drop_volume' | 'compress_rest' | 'supersets' | 'cull_accessories'>;
+  rulesApplied: Array<'drop_volume' | 'compress_rest' | 'supersets' | 'cull_accessories' | 'weekly_minimum_allocation'>;
   removedExerciseIds: string[];
 }
 
@@ -48,11 +49,17 @@ export type WeeklyMuscleBucket =
   | 'hamstrings'
   | 'biceps'
   | 'triceps'
-  | 'side_rear_delts';
+  | 'side_rear_delts'
+  | 'calves_abs';
 
 export interface WeeklyTargetRange {
   min: number;
   max: number;
+}
+
+export interface DurationBasedWeeklyTargetNorm {
+  bucket: WorkoutDurationBucket;
+  weeklyTargetRanges: Record<WeeklyMuscleBucket, WeeklyTargetRange>;
 }
 
 export interface WeeklyQuotaState {
@@ -69,6 +76,7 @@ export interface WeeklyPlannerExercise {
 
 export interface AllocateWeeklyMinimumSetsParams {
   trainingType: TrainingType;
+  availableTimeMinutes?: number;
   exercises: WeeklyPlannerExercise[];
 }
 
@@ -107,13 +115,85 @@ const HYPERTROPHY_COMPOUND_REST_SECONDS = 150;
 const HYPERTROPHY_ISOLATION_REST_SECONDS = 120;
 
 const HYPERTROPHY_WEEKLY_TARGET_RANGES: Record<WeeklyMuscleBucket, WeeklyTargetRange> = {
-  chest: { min: 12, max: 14 },
-  back: { min: 12, max: 14 },
-  quads: { min: 12, max: 14 },
-  hamstrings: { min: 8, max: 10 },
-  biceps: { min: 8, max: 10 },
-  triceps: { min: 8, max: 10 },
-  side_rear_delts: { min: 6, max: 8 },
+  chest: { min: 10, max: 14 },
+  back: { min: 12, max: 16 },
+  quads: { min: 10, max: 14 },
+  hamstrings: { min: 8, max: 12 },
+  biceps: { min: 6, max: 10 },
+  triceps: { min: 6, max: 10 },
+  side_rear_delts: { min: 8, max: 12 },
+  calves_abs: { min: 6, max: 10 },
+};
+
+export const HYPERTROPHY_WEEKLY_TARGET_NORMS_BY_DURATION: Record<
+  WorkoutDurationBucket,
+  DurationBasedWeeklyTargetNorm
+> = {
+  '30-45': {
+    bucket: '30-45',
+    weeklyTargetRanges: {
+      chest: { min: 6, max: 10 },
+      back: { min: 8, max: 12 },
+      quads: { min: 6, max: 10 },
+      hamstrings: { min: 4, max: 8 },
+      side_rear_delts: { min: 6, max: 10 },
+      biceps: { min: 4, max: 8 },
+      triceps: { min: 4, max: 8 },
+      calves_abs: { min: 4, max: 8 },
+    },
+  },
+  '45-60': {
+    bucket: '45-60',
+    weeklyTargetRanges: {
+      chest: { min: 10, max: 14 },
+      back: { min: 12, max: 16 },
+      quads: { min: 10, max: 14 },
+      hamstrings: { min: 8, max: 12 },
+      side_rear_delts: { min: 8, max: 12 },
+      biceps: { min: 6, max: 10 },
+      triceps: { min: 6, max: 10 },
+      calves_abs: { min: 6, max: 10 },
+    },
+  },
+  '60-75': {
+    bucket: '60-75',
+    weeklyTargetRanges: {
+      chest: { min: 14, max: 18 },
+      back: { min: 16, max: 20 },
+      quads: { min: 14, max: 18 },
+      hamstrings: { min: 10, max: 14 },
+      side_rear_delts: { min: 12, max: 16 },
+      biceps: { min: 10, max: 14 },
+      triceps: { min: 10, max: 14 },
+      calves_abs: { min: 8, max: 12 },
+    },
+  },
+  '75-90': {
+    bucket: '75-90',
+    weeklyTargetRanges: {
+      chest: { min: 18, max: 22 },
+      back: { min: 20, max: 24 },
+      quads: { min: 18, max: 22 },
+      hamstrings: { min: 12, max: 16 },
+      side_rear_delts: { min: 16, max: 20 },
+      biceps: { min: 12, max: 16 },
+      triceps: { min: 12, max: 16 },
+      calves_abs: { min: 10, max: 14 },
+    },
+  },
+  '90+': {
+    bucket: '90+',
+    weeklyTargetRanges: {
+      chest: { min: 22, max: 26 },
+      back: { min: 24, max: 28 },
+      quads: { min: 22, max: 26 },
+      hamstrings: { min: 16, max: 20 },
+      side_rear_delts: { min: 20, max: 24 },
+      biceps: { min: 14, max: 18 },
+      triceps: { min: 14, max: 18 },
+      calves_abs: { min: 12, max: 16 },
+    },
+  },
 };
 
 const BASELINE_PROFILES: Record<TrainingType, BaselineProfile> = {
@@ -308,7 +388,15 @@ export function resolveWeeklyTargetRanges(trainingType: TrainingType): Record<We
     biceps: { min: 0, max: 0 },
     triceps: { min: 0, max: 0 },
     side_rear_delts: { min: 0, max: 0 },
+    calves_abs: { min: 0, max: 0 },
   };
+}
+
+export function resolveHypertrophyWeeklyTargetNormByDuration(
+  availableTimeMinutes: number
+): DurationBasedWeeklyTargetNorm {
+  const bucket = getWorkoutDurationBucket(availableTimeMinutes);
+  return HYPERTROPHY_WEEKLY_TARGET_NORMS_BY_DURATION[bucket];
 }
 
 export function mapMuscleGroupToWeeklyBucket(targetMuscle: MuscleGroup): WeeklyMuscleBucket | null {
@@ -346,6 +434,14 @@ export function mapMuscleGroupToWeeklyBucket(targetMuscle: MuscleGroup): WeeklyM
     return 'side_rear_delts';
   }
 
+  if (
+    targetMuscle.includes('calves') ||
+    targetMuscle.includes('abs') ||
+    targetMuscle.includes('obliques')
+  ) {
+    return 'calves_abs';
+  }
+
   return null;
 }
 
@@ -378,8 +474,15 @@ function getSetContributionByBucket(input: WorkoutTargetInputExercise): Array<{ 
   return [...contributionByBucket.entries()].map(([bucket, weight]) => ({ bucket, weight }));
 }
 
-function initializeWeeklyQuotaState(trainingType: TrainingType): Record<WeeklyMuscleBucket, WeeklyQuotaState> {
-  const ranges = resolveWeeklyTargetRanges(trainingType);
+function initializeWeeklyQuotaState(
+  trainingType: TrainingType,
+  availableTimeMinutes?: number
+): Record<WeeklyMuscleBucket, WeeklyQuotaState> {
+  const ranges =
+    trainingType === 'hypertrophy' && typeof availableTimeMinutes === 'number' && Number.isFinite(availableTimeMinutes)
+      ? resolveHypertrophyWeeklyTargetNormByDuration(availableTimeMinutes).weeklyTargetRanges
+      : resolveWeeklyTargetRanges(trainingType);
+
   return {
     chest: { target: ranges.chest, achieved: 0 },
     back: { target: ranges.back, achieved: 0 },
@@ -388,6 +491,7 @@ function initializeWeeklyQuotaState(trainingType: TrainingType): Record<WeeklyMu
     biceps: { target: ranges.biceps, achieved: 0 },
     triceps: { target: ranges.triceps, achieved: 0 },
     side_rear_delts: { target: ranges.side_rear_delts, achieved: 0 },
+    calves_abs: { target: ranges.calves_abs, achieved: 0 },
   };
 }
 
@@ -395,7 +499,7 @@ export function allocateSetsToWeeklyMinimums(
   params: AllocateWeeklyMinimumSetsParams
 ): AllocateWeeklyMinimumSetsResult {
   const rulesApplied: string[] = [];
-  const weeklyQuota = initializeWeeklyQuotaState(params.trainingType);
+  const weeklyQuota = initializeWeeklyQuotaState(params.trainingType, params.availableTimeMinutes);
   const plannedExercises = params.exercises.map((exercise) => ({
     ...exercise,
     target: {
@@ -531,15 +635,16 @@ const WEEKLY_BUCKET_DISPLAY_NAMES: Record<WeeklyMuscleBucket, string> = {
   biceps: 'Biceps',
   triceps: 'Triceps',
   side_rear_delts: 'Side/Rear Delts',
+  calves_abs: 'Calves/Abs',
 };
 
-function getHypertrophyWeeklySetTarget(targetMuscle: MuscleGroup): string {
+function getHypertrophyWeeklySetTarget(targetMuscle: MuscleGroup, availableTimeMinutes: number): string {
   const bucket = mapMuscleGroupToWeeklyBucket(targetMuscle);
   if (!bucket) {
     return 'Weekly target: Adjust total weekly sets by muscle demand and recovery.';
   }
 
-  const range = HYPERTROPHY_WEEKLY_TARGET_RANGES[bucket];
+  const range = resolveHypertrophyWeeklyTargetNormByDuration(availableTimeMinutes).weeklyTargetRanges[bucket];
   const displayName = WEEKLY_BUCKET_DISPLAY_NAMES[bucket];
   return `Weekly target: ${displayName} ${range.min}-${range.max} sets.`;
 }
@@ -728,7 +833,9 @@ export function buildWorkoutTargets(params: BuildWorkoutTargetsParams): BuildWor
     const repRange = pickRepRangeForExercise(params.trainingType, movementType, exercise.force, exercise.name);
     const sets = pickSetCountForExercise(params.trainingType, movementType, exercise.force);
     const hypertrophyWeeklyTarget =
-      params.trainingType === 'hypertrophy' ? getHypertrophyWeeklySetTarget(exercise.targetMuscle) : undefined;
+      params.trainingType === 'hypertrophy'
+        ? getHypertrophyWeeklySetTarget(exercise.targetMuscle, params.availableTimeMinutes)
+        : undefined;
     return {
     exerciseId: exercise.exerciseId,
     sets,
@@ -746,6 +853,25 @@ export function buildWorkoutTargets(params: BuildWorkoutTargetsParams): BuildWor
   const rulesApplied: BuildWorkoutTargetsResult['rulesApplied'] = [];
   const removedExerciseIds: string[] = [];
   const durationLimitSeconds = Math.round(params.availableTimeMinutes * 60);
+
+  if (params.trainingType === 'hypertrophy' && exercises.length > 0) {
+    const allocationResult = allocateSetsToWeeklyMinimums({
+      trainingType: params.trainingType,
+      availableTimeMinutes: params.availableTimeMinutes,
+      exercises: exercises.map((target, index) => ({
+        dayIndex: 0,
+        dayAvailableTimeMinutes: params.availableTimeMinutes,
+        input: params.exercises[index]!,
+        target,
+      })),
+    });
+
+    exercises = allocationResult.exercises.map((exercise) => exercise.target);
+
+    if (allocationResult.rulesApplied.includes('weekly_minimum_allocation')) {
+      rulesApplied.push('weekly_minimum_allocation');
+    }
+  }
 
   const refreshExerciseEstimates = () => {
     const supersetCounts = new Map<string, number>();

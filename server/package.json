@@ -13,14 +13,17 @@
     "ai:verify:qdrant": "tsx src/scripts/verifyQdrantIndexing.ts",
     "migrate:retag-pec-fly": "tsx src/scripts/retagFlyExercisesToPecs.ts",
     "migrate:retag-pulldown-lats": "tsx src/scripts/retagPulldownExercisesToLats.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^25.0.9",
+  
+    
     "ts-node": "^10.9.2",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3"

@@ -1,11 +1,13 @@
 {
   "name": "athly",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "start": "npm run start --workspace=server",
     "dev": "npm run dev --workspace=server",
     "dev:server": "npm run dev --workspace=server",
-    "dev:client": "npm run dev --workspace=client"
+    "dev:client": "npm run dev --workspace=client",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "workspaces": [
     "server",
@@ -24,9 +26,12 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.0.9",
     "gts": "^7.0.0",
+    "jest": "^30.3.0",
     "nodemon": "^3.1.11",
+    "ts-jest": "^29.4.9",
     "tsx": "^4.21.0"
   }
 }
