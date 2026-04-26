@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ApiError,
   workoutsApi,
@@ -8,6 +8,11 @@ import {
   type ReplaceExercisePayload,
 } from '../connection/api.ts'
 import { useAuth } from '../state/authSessionStore.ts'
+import {
+  clearActiveWorkoutContext,
+  getActiveWorkoutContext,
+  setActiveWorkoutContext,
+} from '../state/activeWorkoutContext.ts'
 
 function coerceFiniteNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -206,22 +211,72 @@ function summarizeNotes(notes: unknown): string {
   return normalizeTextValue(notes) ?? '-'
 }
 
+function formatElapsedTime(totalSeconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds))
+  const minutes = Math.floor(safeSeconds / 60)
+  const seconds = safeSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function getInitialActiveWorkoutContext(): {
+  activeWorkoutId: string | null
+  startedAtMs: number | null
+  elapsedSeconds: number
+} {
+  const context = getActiveWorkoutContext()
+  if (!context) {
+    return {
+      activeWorkoutId: null,
+      startedAtMs: null,
+      elapsedSeconds: 0,
+    }
+  }
+
+  const startedAtMs = Number.isFinite(context.startedAtMs) ? context.startedAtMs : Date.now()
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000))
+
+  return {
+    activeWorkoutId: context.id,
+    startedAtMs,
+    elapsedSeconds,
+  }
+}
+
 function WorkoutTable({
   workout,
   replacingKey,
+  activeWorkoutId,
+  activeWorkoutElapsedSeconds,
+  onToggleWorkoutActive,
   onReplace,
 }: {
   workout: StoredWorkout
   replacingKey: string | null
+  activeWorkoutId: string | null
+  activeWorkoutElapsedSeconds: number
+  onToggleWorkoutActive: (workoutId: string) => void
   onReplace: (workoutId: string, exercise: WorkoutExercise) => Promise<void>
 }) {
+  const isActiveWorkout = activeWorkoutId === workout.id
+  const isAnotherWorkoutActive = activeWorkoutId !== null && !isActiveWorkout
+
   return (
     <article className="w-full rounded-2xl border border-slate-200 p-6">
       <div className="mb-4 flex flex-wrap items-center justify-center gap-3 text-center">
         <h2 className="text-2xl font-semibold text-slate-900">{workout.name}</h2>
-        <span className="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-600">
-          {workout.status}
-        </span>
+        <button
+          type="button"
+          className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={isAnotherWorkoutActive}
+          onClick={() => onToggleWorkoutActive(workout.id)}
+        >
+          {isActiveWorkout ? 'Finish' : 'Start'}
+        </button>
+        {isActiveWorkout ? (
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+            {formatElapsedTime(activeWorkoutElapsedSeconds)}
+          </span>
+        ) : null}
       </div>
       <p className="mb-5 text-center text-sm text-slate-500">
         Created: {new Date(workout.createdAt).toLocaleString()}
@@ -278,11 +333,45 @@ function WorkoutTable({
 }
 
 function WorkoutsPage() {
+  const initialActiveWorkout = getInitialActiveWorkoutContext()
   const { token, isAuthenticated, refreshSession } = useAuth()
   const [workouts, setWorkouts] = useState<StoredWorkout[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(() => isAuthenticated)
   const [error, setError] = useState<string | null>(null)
   const [replacingKey, setReplacingKey] = useState<string | null>(null)
+  const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(initialActiveWorkout.activeWorkoutId)
+  const [activeWorkoutStartedAtMs, setActiveWorkoutStartedAtMs] = useState<number | null>(initialActiveWorkout.startedAtMs)
+  const [activeWorkoutElapsedSeconds, setActiveWorkoutElapsedSeconds] = useState<number>(initialActiveWorkout.elapsedSeconds)
+
+  useEffect(() => {
+    if (!activeWorkoutId || activeWorkoutStartedAtMs === null) {
+      return
+    }
+
+    setActiveWorkoutElapsedSeconds(Math.max(0, Math.floor((Date.now() - activeWorkoutStartedAtMs) / 1000)))
+
+    const timerId = window.setInterval(() => {
+      setActiveWorkoutElapsedSeconds(Math.max(0, Math.floor((Date.now() - activeWorkoutStartedAtMs) / 1000)))
+    }, 1000)
+
+    return () => {
+      window.clearInterval(timerId)
+    }
+  }, [activeWorkoutId, activeWorkoutStartedAtMs])
+
+  useEffect(() => {
+    if (!activeWorkoutId || isLoading) {
+      return
+    }
+
+    const stillExists = workouts.some((workout) => workout.id === activeWorkoutId)
+    if (!stillExists) {
+      setActiveWorkoutId(null)
+      setActiveWorkoutStartedAtMs(null)
+      setActiveWorkoutElapsedSeconds(0)
+      clearActiveWorkoutContext()
+    }
+  }, [activeWorkoutId, isLoading, workouts])
 
   useEffect(() => {
     let cancelled = false
@@ -345,7 +434,7 @@ function WorkoutsPage() {
     }
   }, [isAuthenticated, refreshSession, token])
 
-  const handleReplaceExercise = async (workoutId: string, exercise: WorkoutExercise) => {
+  const handleReplaceExercise = useCallback(async (workoutId: string, exercise: WorkoutExercise) => {
     const rowKey = `${workoutId}:${exercise.userExerciseId}`
     setReplacingKey(rowKey)
     setError(null)
@@ -409,7 +498,35 @@ function WorkoutsPage() {
     } finally {
       setReplacingKey(null)
     }
-  }
+  }, [refreshSession, token])
+
+  const handleToggleWorkoutActive = useCallback((workoutId: string) => {
+    setActiveWorkoutId((current) => {
+      if (current === workoutId) {
+        setActiveWorkoutStartedAtMs(null)
+        setActiveWorkoutElapsedSeconds(0)
+        clearActiveWorkoutContext()
+        return null
+      }
+
+      const selectedWorkout = workouts.find((entry) => entry.id === workoutId)
+      if (selectedWorkout) {
+        const startedAtMs = Date.now()
+        setActiveWorkoutStartedAtMs(startedAtMs)
+        setActiveWorkoutContext({
+          id: selectedWorkout.id,
+          name: selectedWorkout.name,
+          status: selectedWorkout.status,
+          estimatedWorkoutTimeToFinish: selectedWorkout.estimatedWorkoutTimeToFinish,
+          startedAtMs,
+          exerciseNames: selectedWorkout.exercises.map((exercise) => exercise.exerciseName),
+        })
+      }
+
+      setActiveWorkoutElapsedSeconds(0)
+      return workoutId
+    })
+  }, [workouts])
 
   const content = useMemo(() => {
     if (!isAuthenticated) {
@@ -435,12 +552,15 @@ function WorkoutsPage() {
             key={workout.id}
             workout={workout}
             replacingKey={replacingKey}
+            activeWorkoutId={activeWorkoutId}
+            activeWorkoutElapsedSeconds={activeWorkoutElapsedSeconds}
+            onToggleWorkoutActive={handleToggleWorkoutActive}
             onReplace={handleReplaceExercise}
           />
         ))}
       </div>
     )
-  }, [error, isAuthenticated, isLoading, replacingKey, workouts])
+  }, [activeWorkoutElapsedSeconds, activeWorkoutId, error, handleReplaceExercise, handleToggleWorkoutActive, isAuthenticated, isLoading, replacingKey, workouts])
 
   return (
     <section className="mx-auto w-full space-y-5 py-4">

@@ -7,6 +7,7 @@ import { mcpClient } from '../core/mcp/mcpClient.ts'
 import { getMcpRegistrySnapshot, refreshMcpRegistryWithToken } from '../core/mcp/registry.ts'
 import { requestElicitation, requestSamplingApproval } from '../state/protocolUiState.ts'
 import { useAuth } from '../state/authSessionStore.ts'
+import { getActiveWorkoutContext } from '../state/activeWorkoutContext.ts'
 
 type UseAgentOptions = {
   maxLoops?: number
@@ -172,6 +173,61 @@ function isPersistableMessage(message: LlmMessage): boolean {
   return message.role === 'user' || message.role === 'assistant'
 }
 
+function stripLegacyWorkoutSummary(text: string): string {
+  const normalized = text.replace(/\r\n/g, '\n')
+  const hasWorkoutIntro =
+    /\b(?:here(?:'|’)s|here is)\s+your\b[\s\S]*\b(?:session|workout)\b/i.test(normalized) ||
+    /let me know if you have any questions about the exercises\./i.test(normalized)
+  const hasPlainWorkoutTable =
+    /(?:^|\n)\s*exercise\s+weight\s+reps\s+sets\s+rest\s*(?:\n|$)/i.test(normalized) ||
+    /(?:^|\n)\s*exercise\s+sets\s+reps\s+weight\s+rest\s+notes\s*(?:\n|$)/i.test(normalized)
+  const hasWorkoutFollowUp = /how does this look\?\s*we can make adjustments based on your feedback\.?/i.test(normalized)
+
+  if ((hasWorkoutIntro && hasPlainWorkoutTable) || (hasPlainWorkoutTable && hasWorkoutFollowUp)) {
+    return ''
+  }
+
+  return text
+}
+
+function sanitizeConversationMessages(messages: LlmMessage[]): LlmMessage[] {
+  return messages.flatMap((message) => {
+    if (message.role !== 'assistant') {
+      return [message]
+    }
+
+    const sanitizedText = sanitizeAssistantFacingText(message.content.text)
+    if (sanitizedText.length === 0) {
+      return []
+    }
+
+    if (sanitizedText === message.content.text) {
+      return [message]
+    }
+
+    return [
+      {
+        ...message,
+        content: {
+          ...message.content,
+          text: sanitizedText,
+        },
+      },
+    ]
+  })
+}
+
+function areMessageListsEqual(left: LlmMessage[], right: LlmMessage[]): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  return left.every((message, index) => {
+    const other = right[index]
+    return message.role === other.role && message.content.type === other.content.type && message.content.text === other.content.text
+  })
+}
+
 function parseStoredMessages(raw: string): LlmMessage[] {
   try {
     const parsed = JSON.parse(raw) as unknown
@@ -196,17 +252,7 @@ function parseStoredMessages(raw: string): LlmMessage[] {
     })
 
     // Sanitize any previously persisted assistant messages so legacy leaks are removed on load.
-    return safeMessages.map((message) =>
-      message.role === 'assistant'
-        ? {
-            ...message,
-            content: {
-              ...message.content,
-              text: sanitizeAssistantFacingText(message.content.text),
-            },
-          }
-        : message,
-    )
+    return sanitizeConversationMessages(safeMessages)
   } catch {
     return []
   }
@@ -247,7 +293,8 @@ function redactInternalIds(text: string): string {
 
 function sanitizeAssistantFacingText(text: string): string {
   const withoutThoughts = stripThoughtProcess(text)
-  const redacted = redactInternalIds(withoutThoughts)
+  const withoutLegacyWorkoutSummary = stripLegacyWorkoutSummary(withoutThoughts)
+  const redacted = redactInternalIds(withoutLegacyWorkoutSummary)
   return redacted
     .split('\n')
     .map((line) => line.trimEnd())
@@ -959,10 +1006,13 @@ function resolveWorkflowPromptName(userText: string): string | null {
     return 'user-exercise-weight-preference'
   }
 
-  const workoutIntentPattern =
+  const workoutCreationVerbPattern =
+    /\b(create|creating|generate|generating|generated|make|making|plan|planning|planned)\b/
+
+  const workoutContextPattern =
     /(workout|routine|session|training\s*plan|program|split|ppl|push|pull|legs|leg\s*day|full\s*body|upper\s*body|lower\s*body|arms?\s*day|chest\s*day|back\s*day|shoulder\s*day|biceps?|triceps?|quads?|hamstrings?|glutes?|calves?)/
 
-  if (workoutIntentPattern.test(normalized)) {
+  if (workoutCreationVerbPattern.test(normalized) && workoutContextPattern.test(normalized)) {
     return 'workout-creation-plan'
   }
 
@@ -1115,9 +1165,13 @@ function markWorkoutStrictToolProgress(input: {
   }
 }
 
-async function fetchPromptTextFromMcp(name: string, bearerToken?: string): Promise<string | null> {
+async function fetchPromptTextFromMcp(
+  name: string,
+  bearerToken?: string,
+  promptArguments: Record<string, string> = {},
+): Promise<string | null> {
   try {
-    const prompt = await mcpClient.getPrompt(name, {}, bearerToken)
+    const prompt = await mcpClient.getPrompt(name, promptArguments, bearerToken)
     const firstMessage = prompt.messages[0]
 
     if (!firstMessage || firstMessage.content.type !== 'text') {
@@ -1191,6 +1245,14 @@ export function useAgent(options: UseAgentOptions = {}): UseAgentResult {
   }, [authenticatedUserId, messagesStorageKey])
 
   useEffect(() => {
+    const sanitizedMessages = sanitizeConversationMessages(messages)
+
+    if (!areMessageListsEqual(messages, sanitizedMessages)) {
+      messagesRef.current = sanitizedMessages
+      setMessages(sanitizedMessages)
+      return
+    }
+
     messagesRef.current = messages
   }, [messages])
 
@@ -1217,7 +1279,7 @@ export function useAgent(options: UseAgentOptions = {}): UseAgentResult {
     setError(null)
   }, [messagesStorageKey])
 
-  const triggerOnboarding = useCallback((selectedSplit?: string) => {
+  const triggerOnboarding = useCallback(async (selectedSplit?: string) => {
     if (!onboardingFiredFlagKey) {
       return
     }
@@ -1229,11 +1291,17 @@ export function useAgent(options: UseAgentOptions = {}): UseAgentResult {
       return
     }
 
+    const split = selectedSplit?.trim()
+    const promptArgs: Record<string, string> = split ? { split } : {}
+    const runtimeOnboardingText = token
+      ? await fetchPromptTextFromMcp('onboarding-followup', token, promptArgs)
+      : null
+
     const onboardingMessage: LlmMessage = {
       role: 'assistant',
       content: {
         type: 'text',
-        text: buildOnboardingPrompt(selectedSplit),
+        text: runtimeOnboardingText ?? buildOnboardingPrompt(selectedSplit),
       },
     }
 
@@ -1241,7 +1309,7 @@ export function useAgent(options: UseAgentOptions = {}): UseAgentResult {
     window.sessionStorage.setItem(onboardingFiredFlagKey, '1')
     messagesRef.current = nextMessages
     setMessages(nextMessages)
-  }, [onboardingFiredFlagKey])
+  }, [onboardingFiredFlagKey, token])
 
   const run = useCallback(
     async (userText: string) => {
@@ -1318,7 +1386,33 @@ export function useAgent(options: UseAgentOptions = {}): UseAgentResult {
             )
           : null
 
-        const mergedSystemInstructions = [systemInstructions, workflowInstructions]
+        const activeWorkoutContext = getActiveWorkoutContext()
+        const workoutStartFlowInstructions = activeWorkoutContext
+          ? await withTimeout(
+              fetchPromptTextFromMcp('workout-start-flow', activeToken),
+              timeoutMs,
+              'Workflow prompt fetch: workout-start-flow',
+            )
+          : null
+        const activeWorkoutSystemContext = activeWorkoutContext
+          ? [
+              'Active workout context (hidden from end user):',
+              `- activeWorkoutId: ${activeWorkoutContext.id}`,
+              `- workoutName: ${activeWorkoutContext.name}`,
+              `- status: ${activeWorkoutContext.status}`,
+              `- estimatedDurationMinutes: ${activeWorkoutContext.estimatedWorkoutTimeToFinish}`,
+              `- exerciseNames: ${activeWorkoutContext.exerciseNames.slice(0, 20).join(', ')}`,
+              'When the user refers to "this workout", "current workout", or workout progress, use only this active workout context.',
+              'Do not reference other saved workouts unless the user explicitly asks to switch workouts.',
+            ].join('\n')
+          : ''
+
+        const mergedSystemInstructions = [
+          systemInstructions,
+          activeWorkoutSystemContext,
+          workoutStartFlowInstructions,
+          workflowInstructions,
+        ]
           .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
           .join('\n\n')
         const isStrictWorkoutFlow = workflowPromptName === 'workout-creation-plan'
@@ -1387,6 +1481,8 @@ export function useAgent(options: UseAgentOptions = {}): UseAgentResult {
 
           if (toolCalls.length === 0 && llmResponse.text.trim().length > 0) {
             const isWorkflowTurn = workflowPromptName !== null
+            const shouldSuppressSuccessfulWorkoutWorkflowReply =
+              workflowPromptName === 'workout-creation-plan' && hasSuccessfulWorkoutSave
             
             const workflowStillPending =
               workflowPromptName === 'workout-creation-plan' && !hasSuccessfulWorkoutSave
@@ -1406,6 +1502,12 @@ export function useAgent(options: UseAgentOptions = {}): UseAgentResult {
               continuationInstruction =
                 'Do not describe your plan. Execute the required tools now, then provide only the final user-facing result.'
               continue
+            }
+
+            if (shouldSuppressSuccessfulWorkoutWorkflowReply) {
+              assistantTextProduced = true
+              completedWithFinalResponse = true
+              break
             }
 
             const safeAssistantText = humanizeStructuredAssistantText(llmResponse.text)
@@ -1782,6 +1884,14 @@ export function useAgent(options: UseAgentOptions = {}): UseAgentResult {
           }
           workingMessages = [...workingMessages, saveFailureMessage]
           setMessages(workingMessages)
+          assistantTextProduced = true
+          completedWithFinalResponse = true
+        }
+
+        const shouldSuppressSuccessfulWorkoutWorkflowReply =
+          workflowPromptName === 'workout-creation-plan' && hasSuccessfulWorkoutSave && !workoutSaveFailureMessage
+
+        if (shouldSuppressSuccessfulWorkoutWorkflowReply) {
           assistantTextProduced = true
           completedWithFinalResponse = true
         }

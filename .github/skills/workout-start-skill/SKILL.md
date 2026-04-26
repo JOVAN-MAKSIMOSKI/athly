@@ -27,12 +27,19 @@ Out of scope:
 # Intended Inputs
 - User intent to start workout (for example: "start workout", "begin leg day").
 - Optional context from active plan (day, exercise list, targets, rest windows).
+- Required runtime context: the currently started/active workout session (workout id/name and exercise list).
 - Ongoing user check-ins during session (set completed, pain, low energy, substitutions).
+
+# Active Workout Scope
+- The skill must operate only on the currently started/active workout present in context.
+- Do not reference, modify, or coach against any other saved/planned workout while an active workout exists.
+- If no active workout context is present, ask for or establish the active workout before continuing set-by-set coaching.
 
 # Intended Outputs
 - A structured coaching sequence for the current workout.
 - Short, actionable prompts for each step.
 - A clean handoff format for orchestrator/tooling integration later.
+- Include the weight for each of the exercise in the response and proper resting time between sets.
 
 # Behavior Contract (Draft)
 1. Start gate:

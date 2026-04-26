@@ -20,6 +20,8 @@ import {
 } from './tools/progress/index.js';
 import {
   registerWorkoutCreationPrompt,
+  registerWorkoutStartPrompt,
+  registerOnboardingFollowupPrompt,
   registerProgressIntermediateAdvancedPrompt,
   registerUserExerciseWeightPreferencePrompt,
   registerEliteCoachSystemPrompt,
@@ -104,6 +106,8 @@ function createConfiguredMcpServer(): McpServer {
   registerProgressIntermediateAdvancedTool(server);
   registerEliteCoachSystemPrompt(server);
   registerWorkoutCreationPrompt(server);
+  registerWorkoutStartPrompt(server);
+  registerOnboardingFollowupPrompt(server);
   registerProgressIntermediateAdvancedPrompt(server);
   registerUserExerciseWeightPreferencePrompt(server);
 

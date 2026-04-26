@@ -1483,6 +1483,9 @@ export async function generateWorkoutDayForUser(
       ? 'rpe' as const
       : 'rep_range' as const;
 
+  const resolveTargetReps = (targetReps: string): string =>
+    progressionMethod === 'two_x_to_failure' ? 'FAILURE' : targetReps;
+
   const persistedUserExercises = [] as Array<{
     id: string;
     exerciseId: string;
@@ -1523,7 +1526,7 @@ export async function generateWorkoutDayForUser(
           currentTarget: {
             weight,
             progressionMethod,
-            reps: progressionMethod === 'two_x_to_failure' ? 'FAILURE' : progressionMethod === 'rep_range' ? target.reps : undefined,
+            reps: resolveTargetReps(target.reps),
             sets: progressionMethod === 'two_x_to_failure' ? 2 : target.sets,
             rpe: progressionMethod === 'rpe' ? target.rpe : undefined,
             restSeconds: progressionMethod === 'two_x_to_failure' ? 150 : target.restSeconds,
@@ -1560,7 +1563,7 @@ export async function generateWorkoutDayForUser(
       targetMuscle: exercise.targetMuscle,
       movementType: target.movementType,
       weight,
-      reps: progressionMethod === 'two_x_to_failure' ? 'FAILURE' : progressionMethod === 'rep_range' ? target.reps : undefined,
+      reps: resolveTargetReps(target.reps),
       rpe: progressionMethod === 'rpe' ? target.rpe : undefined,
       sets: progressionMethod === 'two_x_to_failure' ? 2 : target.sets,
       restSeconds: progressionMethod === 'two_x_to_failure' ? 150 : target.restSeconds,
@@ -1578,7 +1581,7 @@ export async function generateWorkoutDayForUser(
       const selectedExercise = selectedById.get(target.exerciseId)!;
       return {
         sets: progressionMethod === 'two_x_to_failure' ? 2 : target.sets,
-        reps: progressionMethod === 'two_x_to_failure' ? 'FAILURE' : progressionMethod === 'rep_range' ? target.reps : undefined,
+        reps: resolveTargetReps(target.reps),
         restSeconds: progressionMethod === 'two_x_to_failure' ? 150 : target.restSeconds,
         movementType: target.movementType,
         force: selectedExercise.force,
